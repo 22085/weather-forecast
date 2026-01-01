@@ -1,161 +1,191 @@
-	// clear warnings
-	console.clear();
-	// 心知天气API签名认证
-  var UID = "PC7EcgQm4VQ0h5z4D"; 
-  var KEY = "S9AqXU-r59aXDCqGD"; 
-  var API = "https://api.seniverse.com/v3/weather/now.json"; // 获取实时天气
-  var LOCATION;
-  // 获取当前时间戳
-  var ts = Math.floor((new Date()).getTime() / 1000);
-  // 构造验证参数字符串
-  var str = "ts=" + ts + "&uid=" + UID;
-  // 使用 HMAC-SHA1 方式，以 API 密钥（key）对上一步生成的参数字符串（raw）进行加密
-  // 并将加密结果用 base64 编码，并做一个 urlencode，得到签名 sig
-  var sig = CryptoJS.HmacSHA1(str, KEY).toString(CryptoJS.enc.Base64);
-  sig = encodeURIComponent(sig);
-  str = str + "&sig=" + sig;
+console.clear();
 
-  // 根据Geolocation API，获取当前所在地的经纬度
-  var x, y;
+// 当前天气源
+let currentSource = 'seniverse'; // 'seniverse' 或 'openmeteo'
 
-	function getCurrentLocation() {
-	    if (navigator.geolocation) {
-	        navigator.geolocation.getCurrentPosition(showPosition);
-	    } else {
-	        alert("Geolocation is not supported by this browser.");
-	    }
-	}
+// 心知天气配置（你的密钥）
+const UID = "PC7EcgQm4VQ0h5z4D";
+const KEY = "S9AqXU-r59aXDCqGD";
+const NOW_API = "https://api.seniverse.com/v3/weather/now.json";
+const DAILY_API = "https://api.seniverse.com/v3/weather/daily.json";
 
-	function showPosition(position) {
-	    x =  position.coords.latitude;
-	    y = position.coords.longitude; 
-	}
+// 高德地图 Key
+const AMapKey = "7a60847e1def287410455534dcbfcd1d";
 
-  getCurrentLocation();
+let LOCATION = "";
 
-  var currentCity;
+// 切换按钮函数
+function toggleWeatherSource() {
+    currentSource = currentSource === 'seniverse' ? 'openmeteo' : 'seniverse';
+    $('#currentSource').text(currentSource === 'seniverse' ? '当前：心知天气（国内）' : '当前：Open-Meteo（国际）');
+    $('#toggleSource').text(currentSource === 'seniverse' ? '切换国际天气（Open-Meteo）' : '切换心知天气（国内）');
+    
+    if (LOCATION) loadWeather(LOCATION);
+}
 
-	// 根据百度地图API和经纬度，获取所在的城市名
-	var map = new BMap.Map("allmap");
-	var point = new BMap.Point(x,y);
+// 加载高德地图并自动定位城市
+function loadAMapAndStart() {
+    AMapLoader.load({
+        key: AMapKey,
+        version: "2.0",
+        plugins: ['AMap.Geocoder']
+    }).then((AMap) => {
+        navigator.geolocation.getCurrentPosition(pos => {
+            const lng = pos.coords.longitude;
+            const lat = pos.coords.latitude;
+            new AMap.Geocoder().getAddress([lng, lat], (status, result) => {
+                let city = "北京";
+                if (status === 'complete' && result.regeocode) {
+                    city = result.regeocode.addressComponent.city || result.regeocode.addressComponent.province || "北京";
+                }
+                LOCATION = city;
+                loadWeather(city);
+            });
+        }, () => {
+            LOCATION = "北京";
+            loadWeather("北京");
+        });
+    }).catch(() => {
+        LOCATION = "北京";
+        loadWeather("北京");
+    });
+}
 
-	function myFun(result){
-		currentCity = result.name;
-		// 触发第一次请求,获取当前所在地的天气情况，并更新视图。
-		var e = $.Event( "keydown", { keyCode: 13 } );
-		$('input').trigger(e,currentCity);
-	}
+// 主天气加载函数
+function loadWeather(location) {
+    LOCATION = location.trim() || "北京";
+    $('.city').text(LOCATION);
+    updateBgImg($('.bg'));
 
-	var myCity = new BMap.LocalCity();
-	myCity.get(myFun);
+    if (currentSource === 'seniverse') {
+        loadSeniverse(LOCATION);
+    } else {
+        loadOpenMeteo(LOCATION);
+    }
+}
 
-	// 以jsonp方式获取当前天气的数据
-	function sendTodayWeatherRequest(location) {
-		var todayUrl = API + "?location=" + location + "&" + str + "&callback=renderTodayWeather";
-		// 向 HTML 中动态插入 script 标签，通过 JSONP 的方式进行调用
-		var todayScript = document.createElement('script');
-		todayScript.src = todayUrl;
-		$('body').append(todayScript);
+// 心知天气
+function loadSeniverse(location) {
+    const ts = Math.floor(Date.now() / 1000);
+    const str = "ts=" + ts + "&uid=" + UID;
+    const sig = encodeURIComponent(CryptoJS.HmacSHA1(str, KEY).toString(CryptoJS.enc.Base64));
+    const params = str + "&sig=" + sig;
 
-		todayScript.onerror = function() {
-			alert('获取不到该城市天气，请重新输入');
-			return console.clear();
-		}
-		setTimeout(function(){
-			$(todayScript).remove();
-		},0);
-	}
+    // 实时
+    const nowUrl = `${NOW_API}?location=${encodeURIComponent(location)}&${params}&callback=renderSeniverseNow`;
+    // 预报
+    const dailyUrl = `${DAILY_API}?location=${encodeURIComponent(location)}&${params}&callback=renderSeniverseDaily`;
 
-	// 以jsonp方式获取未来三天天气的数据
-	function sendFutureWeatherRequest(location) {
-		var futureUrl = 'https://api.seniverse.com/v3/weather/daily.json?location='+location+ "&" + str +'&callback=renderFutureWeather';
-		
-		var futureScript = document.createElement('script');
-		$('body').append(futureScript);
-		futureScript.src = futureUrl;
-		futureScript.onerror = function() {
-			alert('获取不到该城市天气，请重新输入');
-			return console.clear();
-		}
-		setTimeout(function(){
-			$(futureScript).remove();
-		},0); 				
-	}
+    $('body').append(`<script src="${nowUrl}"></script>`);
+    $('body').append(`<script src="${dailyUrl}"></script>`);
+}
 
-	// 实现搜索功能
-	$('input').on('keydown',function(e,currentCity){
+// Open-Meteo（全球）
+function loadOpenMeteo(location) {
+    fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=zh`)
+        .then(r => r.json())
+        .then(geo => {
+            let lat = 39.9042, lng = 116.4074; // 默认北京
+            let cityName = location;
+            if (geo.results && geo.results[0]) {
+                lat = geo.results[0].latitude;
+                lng = geo.results[0].longitude;
+                cityName = geo.results[0].name + (geo.results[0].country ? ', ' + geo.results[0].country : '');
+            }
+            $('.city').text(cityName);
 
-			if(e.keyCode === 13){	
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto`;
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    renderOpenMeteoNow(data);
+                    renderOpenMeteoDaily(data);
+                });
+        });
+}
 
-				LOCATION = currentCity || $('input').val();
+// 渲染：心知实时
+function renderSeniverseNow(data) {
+    const info = data.results[0];
+    const now = info.now;
+    $('.currentTemp').text(now.temperature + '°');
+    $('.desc').text(now.text);
+    $('.currentWeatherImg img').attr('src', 'images/' + now.code + '.png');
+    updateTime();
+}
 
-				updateBgImg($('.bg'));
- 
-        sendTodayWeatherRequest(LOCATION);
-				sendFutureWeatherRequest(LOCATION);
+// 渲染：心知预报
+function renderSeniverseDaily(data) {
+    const daily = data.results[0].daily;
+    $('.future').each(function(i) {
+        if (i < 3) {
+            const d = daily[i];
+            $(this).find('.date').text(getWeekDay(d.date));
+            $(this).find('.desc').text(d.text_day);
+            $(this).find('img').attr('src', 'images/' + d.code_day + '.png');
+            $(this).find('.temp').text(d.low + '°~' + d.high + '°');
+        }
+    });
+    $('.wind').text(daily[0].wind_direction + '风 ' + daily[0].wind_scale + '级');
+}
 
-				var updateInterval = 1000 * 60 * 10;
+// 渲染：Open-Meteo 实时
+function renderOpenMeteoNow(data) {
+    const c = data.current;
+    const descMap = {0:'晴',1:'少云',2:'多云',3:'阴',45:'雾',51:'小雨',53:'中雨',55:'大雨',61:'小雨',63:'雨',65:'大雨',71:'小雪',73:'雪',75:'大雪',80:'阵雨',95:'雷阵雨'};
+    const desc = descMap[c.weather_code] || '多云';
+    $('.currentTemp').text(Math.round(c.temperature_2m) + '°');
+    $('.desc').text(desc);
+    $('.wind').text('风速 ' + Math.round(c.wind_speed_10m) + ' km/h');
+    $('.currentWeatherImg img').attr('src', 'images/' + (c.weather_code < 10 ? '0' + c.weather_code : c.weather_code) + '.png');
+    updateTime();
+}
 
-				$('input').val("").blur();
+// 渲染：Open-Meteo 预报
+function renderOpenMeteoDaily(data) {
+    const descMap = {0:'晴',1:'少云',2:'多云',3:'阴',45:'雾',51:'小雨',61:'雨',71:'雪',80:'阵雨',95:'雷阵雨'};
+    data.daily.time.slice(0,3).forEach((date, i) => {
+        const el = $('.future').eq(i);
+        const code = data.daily.weather_code[i];
+        el.find('.date').text(getWeekDay(date));
+        el.find('.desc').text(descMap[code] || '多云');
+        el.find('.temp').text(Math.round(data.daily.temperature_2m_min[i]) + '°~' + Math.round(data.daily.temperature_2m_max[i]) + '°');
+        el.find('img').attr('src', 'images/' + (code < 10 ? '0' + code : code) + '.png');
+    });
+}
 
-				// 每隔10分钟更新天气情况
-				setInterval(function(){
-					sendTodayWeatherRequest(LOCATION);
-					sendFutureWeatherRequest(LOCATION);
-					console.log('location: ',LOCATION);
-				}, updateInterval);
-			}
-	 })
+// 星期
+function getWeekDay(dateStr) {
+    const week = ['日','一','二','三','四','五','六'];
+    return '星期' + week[new Date(dateStr).getDay()];
+}
 
-  // 格式化时间，显示星期N
-  function getWeekDay(date) {
-  	var weekList = ['日','一','二','三','四','五','六'];
-  	var weekIndex = new Date(date).getDay();
-  	return '星期' + weekList[weekIndex];
-  }
+// 时间
+function updateTime() {
+    const now = new Date();
+    let h = now.getHours() % 12 || 12;
+    h = h < 10 ? '0' + h : h;
+    const m = now.getMinutes() < 10 ? '0' + now.getMinutes() : now.getMinutes();
+    $('.time').text(h + ':' + m + (now.getHours() >= 12 ? ' pm' : ' am'));
+    setTimeout(updateTime, 30000);
+}
 
-	// 实时更新时间
-	function updateTime(){
-  	var hours = new Date().getHours();
-  	var minutes = new Date().getMinutes();
-  	minutes = minutes >= 10 ? minutes : '0' + minutes;
-  	hours = hours < 10 ? '0' + hours : hours;
-  	var suffix = hours >= 12 ? 'pm' : 'am';
-  	$('.time').text(hours+':'+minutes+' '+suffix);
-  	setTimeout(updateTime, 30*1000);
-	}
+// 背景图
+function updateBgImg(el) {
+    el.css('background-image', `url(https://picsum.photos/1000/800/?random&t=${Math.random()})`);
+}
 
-	// 渲染当天天气视图
-  function renderTodayWeather(data) {
-  	var weatherInfo = data.results[0];
-  	var location = weatherInfo.location;
-  	var city =location.name;
-  	$('.city').text(city);
+// 搜索
+$('input').on('keydown', e => {
+    if (e.keyCode === 13) {
+        const val = $('input').val().trim();
+        if (val) loadWeather(val);
+        $('input').val('').blur();
+    }
+});
 
-  	updateTime();
-
-  	var now = weatherInfo.now;
-  	var temp = now.temperature;
-  	$('.currentTemp').text(temp+'°');
-  	$('.desc').text(now.text);		
-  	$('.currentDate').text(getWeekDay(weatherInfo.last_update));
-  	var weathercode = now.code;
-  	$('.currentWeatherImg img').attr('src','images/'+weathercode+'.png');
-  }
-
-	// 渲染未来三天天气视图
-  function renderFutureWeather(data){
-  	var futureWeather = data.results[0].daily;
-  	$('.future').each(function(index){
-  		$(this).find('.date').text(getWeekDay(futureWeather[index].date));
-  		$(this).find('.desc').text(futureWeather[index].text_day);
-  		$(this).find('img').attr('src','images/'+futureWeather[index].code_day+'.png');
-  		$(this).find('.temp').text(futureWeather[index].low+'°~'+futureWeather[index].high+'°');
-  	})
-  	$('.wind').text(futureWeather[0].wind_direction+'风 '+futureWeather[0].wind_scale+'级');
-  }
-
-  // 更换背景图片
-  function updateBgImg($el) {
-   $el.css('background-image', "url(https://picsum.photos/1000/800/?random&t="+Math.random()+")");
-  }
+// 启动
+$(() => {
+    updateBgImg($('.bg'));
+    loadAMapAndStart();
+});
