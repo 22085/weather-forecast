@@ -1,8 +1,8 @@
 	// clear warnings
 	console.clear();
 	// 心知天气API签名认证
-  var UID = "U30962D0D3"; 
-  var KEY = "lf992xgfn8fpiasj"; 
+  var UID = "PC7EcgQm4VQ0h5z4D"; 
+  var KEY = "S9AqXU-r59aXDCqGD"; 
   var API = "https://api.seniverse.com/v3/weather/now.json"; // 获取实时天气
   var LOCATION;
   // 获取当前时间戳
