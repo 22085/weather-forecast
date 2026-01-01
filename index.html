@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-Hans">
 <head>
+	<!-- 高德地图 Loader（新版推荐方式） -->
+<script src="https://webapi.amap.com/loader.js"></script>
+<!-- CryptoJS（心知天气签名必须） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<!-- jQuery（项目原依赖） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
 	<title>Weather-Forcast</title>
@@ -9,7 +15,10 @@
 </head>
 <body>
 		
-
+<div class="weather-source-toggle">
+    <button id="toggleSource">切换国际天气（Open-Meteo）</button>
+    <span id="currentSource">当前：心知天气（国内）</span>
+</div>
 <div class="container center">
 	<div class="bg"></div>
 	<div class="inputBox">
@@ -64,9 +73,39 @@
 	</div>
 </div>
 
-<script src="https://api.map.baidu.com/api?v=2.0&ak=w8mnLBIGyTl7dORrv6mZE4911nt27rP7&s=1&t=20180201111639"></script>
+
 <script src="./js/jquery.min.js"></script>
 <script src="./js/hmac-sha1.js"></script>
 <script src="./js/index.js"></script>
 </body>
+<style>
+.weather-source-toggle {
+    text-align: center;
+    margin: 20px 0;
+}
+#toggleSource {
+    padding: 10px 20px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 30px;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+}
+#toggleSource:hover {
+    background: rgba(255,255,255,0.4);
+}
+#currentSource {
+    margin-left: 15px;
+    font-size: 14px;
+    opacity: 0.9;
+}
+<style>
+
+
+
+
+
+
 </html>
